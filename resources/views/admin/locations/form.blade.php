@@ -49,6 +49,13 @@
                 </div>
             </div>
 
+            <div class="field">
+                <div class="toolbar" style="margin-bottom:0">
+                    <button type="button" class="btn secondary small" id="gps-capture">Ambil Koordinat dari GPS</button>
+                </div>
+                <p class="hint" id="gps-feedback" role="status" aria-live="polite"></p>
+            </div>
+
             <div class="toolbar" style="margin-bottom:0">
                 <button type="submit" class="btn">Simpan Lokasi</button>
                 <a class="btn secondary" href="{{ route('admin.locations.index') }}">Batal</a>
@@ -73,4 +80,80 @@
             </div>
         </div>
     @endif
+
+    <script>
+        (function () {
+            var button = document.getElementById('gps-capture');
+            var feedback = document.getElementById('gps-feedback');
+            var latitude = document.getElementById('latitude');
+            var longitude = document.getElementById('longitude');
+            var radius = document.getElementById('radius');
+
+            var tones = { info: '#64748b', ok: '#15803d', warn: '#b45309', error: '#b91c1c' };
+
+            function report(message, tone) {
+                feedback.textContent = message;
+                feedback.style.color = tones[tone] || tones.info;
+            }
+
+            if (!button) {
+                return;
+            }
+
+            if (window.isSecureContext === false) {
+                button.disabled = true;
+                report('GPS tidak dapat dipakai: halaman ini dibuka lewat HTTP. Buka lewat HTTPS atau localhost agar browser mengizinkan akses lokasi.', 'error');
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                button.disabled = true;
+                report('Browser Anda tidak mendukung Geolocation API. Isi latitude dan longitude secara manual.', 'error');
+                return;
+            }
+
+            function onError(error) {
+                button.disabled = false;
+
+                var messages = {
+                    1: 'Izin lokasi ditolak. Izinkan akses lokasi pada browser lalu coba lagi, atau isi koordinat secara manual.',
+                    2: 'Sinyal lokasi tidak tersedia. Pastikan perangkat lock GPS atau isi koordinat secara manual.',
+                    3: 'Pembacaan GPS melebihi batas waktu. Coba lagi di tempat dengan sinyal lebih baik, atau isi koordinat secara manual.',
+                };
+
+                report(messages[error.code] || 'Gagal membaca GPS. Isi koordinat secara manual.', 'error');
+            }
+
+            button.addEventListener('click', function () {
+                button.disabled = true;
+                report('Membaca posisi GPS, tunggu sebentar...', 'info');
+
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    button.disabled = false;
+
+                    latitude.value = position.coords.latitude.toFixed(7);
+                    longitude.value = position.coords.longitude.toFixed(7);
+
+                    var accuracy = Math.round(position.coords.accuracy);
+                    var allowedRadius = parseFloat(radius.value) || 0;
+
+                    if (allowedRadius > 0 && accuracy > allowedRadius / 2) {
+                        report('Koordinat terisi dari GPS dengan akurasi +/- ' + accuracy + ' m. Nilai itu besar dibanding radius ' + allowedRadius + ' m, jadi pertimbangkan menaikkan radius atau ambil koordinat di titik yang lebih terbuka.', 'warn');
+                        return;
+                    }
+
+                    if (accuracy > 50) {
+                        report('Koordinat terisi dari GPS dengan akurasi +/- ' + accuracy + ' m. Akurasi kurang baik, periksa hasilnya sebelum menyimpan.', 'warn');
+                        return;
+                    }
+
+                    report('Koordinat terisi dari GPS dengan akurasi +/- ' + accuracy + ' m.', 'ok');
+                }, onError, {
+                    enableHighAccuracy: true,
+                    timeout: 20000,
+                    maximumAge: 0,
+                });
+            });
+        })();
+    </script>
 @endsection

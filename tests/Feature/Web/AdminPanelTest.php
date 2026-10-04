@@ -158,6 +158,20 @@ class AdminPanelTest extends TestCase
         $this->assertNotNull($location->qr_rotated_at);
     }
 
+    public function test_location_form_can_capture_coordinates_from_the_browser_gps(): void
+    {
+        $this->admin();
+
+        $this->get('/admin/locations/create')
+            ->assertOk()
+            ->assertSee('Ambil Koordinat dari GPS')
+            ->assertSee('getCurrentPosition', false);
+
+        $this->get('/admin/locations/'.AttendanceLocation::factory()->create()->id.'/edit')
+            ->assertOk()
+            ->assertSee('getCurrentPosition', false);
+    }
+
     public function test_admin_can_override_attendance_status(): void
     {
         $this->admin();
