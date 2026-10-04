@@ -347,6 +347,17 @@ class AttendanceService
         return trim($ticket);
     }
 
+    private function resolveTimezone(AttendanceSetting $setting): string
+    {
+        $tz = trim((string) $setting->timezone);
+
+        if ($tz !== '') {
+            return $tz;
+        }
+
+        return config('app.timezone', 'Asia/Jakarta');
+    }
+
     private function assertWorkingHours(Employee $employee, Carbon $date): void
     {
         if (! $this->isWorkday($employee, $date)) {
@@ -361,9 +372,11 @@ class AttendanceService
 
         if ($schedule !== null && $schedule['start'] !== null) {
             $setting = AttendanceSetting::current();
-            $startAt = Carbon::parse($date->toDateString().' '.$schedule['start']);
+            $tz = $this->resolveTimezone($setting);
+            $now = now($tz);
+            $startAt = Carbon::parse($date->toDateString().' '.$schedule['start'], $tz);
 
-            if (now()->lt($startAt->copy()->subMinutes($setting->tolerance_minutes))) {
+            if ($now->lt($startAt->copy()->subMinutes($setting->tolerance_minutes))) {
                 throw AttendanceException::make(
                     'Check-in hanya dapat dilakukan mulai pukul '.$schedule['start'].'.',
                     'TOO_EARLY',
@@ -376,10 +389,13 @@ class AttendanceService
 
     private function resolveStatus(Carbon $date, AttendanceSetting $setting): string
     {
-        $lateThreshold = Carbon::parse($date->toDateString().' '.substr((string) $setting->work_start, 0, 5))
+        $tz = $this->resolveTimezone($setting);
+        $now = now($tz);
+        $workStart = substr((string) $setting->work_start, 0, 5);
+        $lateThreshold = Carbon::parse($date->toDateString().' '.$workStart, $tz)
             ->addMinutes($setting->tolerance_minutes);
 
-        return now()->gt($lateThreshold)
+        return $now->gt($lateThreshold)
             ? AttendanceRecord::STATUS_TERLAMBAT
             : AttendanceRecord::STATUS_HADIR;
     }
