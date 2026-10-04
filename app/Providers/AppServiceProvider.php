@@ -3,10 +3,8 @@
 namespace App\Providers;
 
 use App\Models\AttendanceSetting;
-use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -28,20 +26,36 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * The attendance_settings row is the single source of truth for the
+     * application timezone, so stored timestamps, work hour thresholds and the
+     * offsets handed to the mobile app can never disagree. When no valid row is
+     * readable the APP_TIMEZONE value stays in charge.
+     */
     private function applyApplicationTimezone(): void
     {
-        try {
-            $setting = AttendanceSetting::query()->first();
-            $tz = $setting?->timezone;
+        $timezone = (string) config('app.timezone');
 
-            if (is_string($tz) && trim($tz) !== '') {
-                $timezone = trim($tz);
-                config(['app.timezone' => $timezone]);
-                date_default_timezone_set($timezone);
-                Date::use(CarbonImmutable::class);
+        try {
+            $stored = trim((string) AttendanceSetting::query()->value('timezone'));
+
+            if ($this->isValidTimezone($stored)) {
+                $timezone = $stored;
             }
         } catch (\Throwable $e) {
             // Ignore if table/settings not available (e.g. fresh install).
         }
+
+        config(['app.timezone' => $timezone]);
+        date_default_timezone_set($timezone);
+    }
+
+    /**
+     * Mirrors the "timezone" validation rule used by the settings form so a
+     * stale or hand edited row can never break date handling.
+     */
+    private function isValidTimezone(string $timezone): bool
+    {
+        return $timezone !== '' && in_array($timezone, timezone_identifiers_list(), true);
     }
 }

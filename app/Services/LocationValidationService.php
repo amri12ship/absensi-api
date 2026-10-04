@@ -27,6 +27,7 @@ class LocationValidationService
     ): LocationValidation {
         $request ??= request();
         $setting = AttendanceSetting::current();
+        $timezone = $this->resolveTimezone($setting);
         $token = $this->extractToken($scannedCode);
 
         $location = AttendanceLocation::query()
@@ -49,7 +50,7 @@ class LocationValidationService
 
         $issuedToday = LocationValidation::query()
             ->where('employee_id', $employee->id)
-            ->whereDate('issued_at', now())
+            ->whereDate('issued_at', now($timezone))
             ->count();
 
         if ($issuedToday >= $setting->max_ticket_per_day) {
@@ -81,8 +82,8 @@ class LocationValidationService
             'employee_device_id' => $this->resolveDeviceId($employee, $context),
             'ticket' => (string) Str::uuid(),
             'status' => LocationValidation::STATUS_ISSUED,
-            'issued_at' => now(),
-            'expires_at' => now()->addSeconds($setting->ticket_ttl_seconds),
+            'issued_at' => now($timezone),
+            'expires_at' => now($timezone)->addSeconds($setting->ticket_ttl_seconds),
             'latitude' => $context['latitude'] ?? null,
             'longitude' => $context['longitude'] ?? null,
             'accuracy' => $accuracy,
@@ -214,6 +215,21 @@ class LocationValidationService
         }
 
         return trim($scanned);
+    }
+
+    /**
+     * Kept in sync with AppServiceProvider so ticket timestamps and the daily
+     * quota boundary follow the same zone as the attendance date.
+     */
+    private function resolveTimezone(AttendanceSetting $setting): string
+    {
+        $tz = trim((string) $setting->timezone);
+
+        if ($tz !== '' && in_array($tz, timezone_identifiers_list(), true)) {
+            return $tz;
+        }
+
+        return (string) config('app.timezone', 'Asia/Jakarta');
     }
 
     private function assertEmployeeAllowedAt(Employee $employee, AttendanceLocation $location): void

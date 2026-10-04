@@ -26,8 +26,9 @@ class AttendanceService
      */
     public function today(Employee $employee, ?Carbon $date = null): array
     {
-        $date ??= now();
         $setting = AttendanceSetting::current();
+        $timezone = $this->resolveTimezone($setting);
+        $date ??= now($timezone);
         $record = AttendanceRecord::query()
             ->forDate($date)
             ->where('employee_id', $employee->id)
@@ -35,8 +36,8 @@ class AttendanceService
 
         return [
             'date' => $date->toDateString(),
-            'server_time' => now()->toIso8601String(),
-            'timezone' => $setting->timezone,
+            'server_time' => now($timezone)->toIso8601String(),
+            'timezone' => $timezone,
             'status' => $this->stateOf($record),
             'can_check_in' => $this->canCheckIn($employee, $record, $date),
             'can_check_out' => $record !== null && $record->hasCheckedIn() && ! $record->hasCheckedOut(),
@@ -62,7 +63,8 @@ class AttendanceService
     public function checkIn(Employee $employee, array $context): AttendanceRecord
     {
         $setting = AttendanceSetting::current();
-        $date = now();
+        $timezone = $this->resolveTimezone($setting);
+        $date = now($timezone);
 
         if (! $employee->isActive()) {
             $this->audit->failed('attendance.check_in', $employee->user, $employee, 'Karyawan nonaktif');
@@ -92,7 +94,7 @@ class AttendanceService
 
         $distance = $this->validations->assertWithinRadius($employee, $location, $context);
 
-        $this->assertWorkingHours($employee, $date);
+        $this->assertWorkingHours($employee, $date, $setting);
 
         $selfie = $this->resolveSelfie($employee, $setting, $context, 'check-in');
 
@@ -106,7 +108,7 @@ class AttendanceService
         $record->fill([
             'location_id' => $location->id,
             'location_validation_id' => $validation->id,
-            'check_in_at' => now(),
+            'check_in_at' => now($timezone),
             'check_in_latitude' => $context['latitude'] ?? null,
             'check_in_longitude' => $context['longitude'] ?? null,
             'check_in_distance' => $distance,
@@ -133,9 +135,10 @@ class AttendanceService
     public function checkOut(Employee $employee, array $context): AttendanceRecord
     {
         $setting = AttendanceSetting::current();
+        $timezone = $this->resolveTimezone($setting);
 
         $record = AttendanceRecord::query()
-            ->forDate(now())
+            ->forDate(now($timezone))
             ->where('employee_id', $employee->id)
             ->first();
 
@@ -171,7 +174,7 @@ class AttendanceService
         $selfie = $this->resolveSelfie($employee, $setting, $context, 'check-out');
 
         $record->fill([
-            'check_out_at' => now(),
+            'check_out_at' => now($timezone),
             'check_out_latitude' => $context['latitude'] ?? null,
             'check_out_longitude' => $context['longitude'] ?? null,
             'check_out_distance' => $distance,
@@ -197,8 +200,9 @@ class AttendanceService
      */
     public function history(Employee $employee, array $filters)
     {
-        $from = $filters['from'] ?? now()->startOfMonth()->toDateString();
-        $to = $filters['to'] ?? now()->toDateString();
+        $timezone = $this->resolveTimezone(AttendanceSetting::current());
+        $from = $filters['from'] ?? now($timezone)->startOfMonth()->toDateString();
+        $to = $filters['to'] ?? now($timezone)->toDateString();
         $perPage = min(100, max(1, (int) ($filters['per_page'] ?? 30)));
 
         $query = AttendanceRecord::query()
@@ -347,18 +351,24 @@ class AttendanceService
         return trim($ticket);
     }
 
+    /**
+     * Single timezone used for the attendance date, the stored timestamps and
+     * the work hour thresholds. AppServiceProvider applies the same value to
+     * config('app.timezone') at boot, so this stays correct even when the
+     * settings row is created or edited during the request.
+     */
     private function resolveTimezone(AttendanceSetting $setting): string
     {
         $tz = trim((string) $setting->timezone);
 
-        if ($tz !== '') {
+        if ($tz !== '' && in_array($tz, timezone_identifiers_list(), true)) {
             return $tz;
         }
 
-        return config('app.timezone', 'Asia/Jakarta');
+        return (string) config('app.timezone', 'Asia/Jakarta');
     }
 
-    private function assertWorkingHours(Employee $employee, Carbon $date): void
+    private function assertWorkingHours(Employee $employee, Carbon $date, AttendanceSetting $setting): void
     {
         if (! $this->isWorkday($employee, $date)) {
             throw AttendanceException::make(
@@ -371,7 +381,6 @@ class AttendanceService
         $schedule = $this->scheduleFor($employee, $date);
 
         if ($schedule !== null && $schedule['start'] !== null) {
-            $setting = AttendanceSetting::current();
             $tz = $this->resolveTimezone($setting);
             $now = now($tz);
             $startAt = Carbon::parse($date->toDateString().' '.$schedule['start'], $tz);
