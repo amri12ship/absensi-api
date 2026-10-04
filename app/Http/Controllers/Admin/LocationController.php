@@ -31,7 +31,7 @@ class LocationController extends Controller
     public function create(): View
     {
         return view('admin.locations.form', ['location' => new AttendanceLocation([
-            'radius' => 200,
+            'radius' => AttendanceLocation::DEFAULT_RADIUS_METERS,
             'status' => AttendanceLocation::STATUS_ACTIVE,
         ])]);
     }
@@ -100,7 +100,7 @@ class LocationController extends Controller
 
         $this->audit->success('location.rotate_token', $request->user(), null, "Token QR {$location->name} dirotasi");
 
-        return back()->with('success', "Token QR {$location->name} berhasil dirotasi. Cetak ulang QR code.");
+        return back()->with('success', "Token QR {$location->name} diganti. QR yang dicetak sebelumnya sudah tidak berlaku, cetak ulang QR code.");
     }
 
     /**
@@ -113,7 +113,7 @@ class LocationController extends Controller
             'address' => ['nullable', 'string', 'max:1000'],
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'radius' => ['required', 'integer', 'min:20', 'max:5000'],
+            'radius' => ['required', 'integer', 'min:'.AttendanceLocation::MIN_RADIUS_METERS, 'max:'.AttendanceLocation::MAX_RADIUS_METERS],
             'status' => ['required', Rule::in([AttendanceLocation::STATUS_ACTIVE, AttendanceLocation::STATUS_INACTIVE])],
         ]);
     }

@@ -16,6 +16,15 @@ class AttendanceLocation extends Model
 
     public const STATUS_INACTIVE = 'inactive';
 
+    /**
+     * Batas jarak check-in dari titik koordinat lokasi (dalam meter).
+     */
+    public const MIN_RADIUS_METERS = 20;
+
+    public const MAX_RADIUS_METERS = 100000;
+
+    public const DEFAULT_RADIUS_METERS = 100000;
+
     protected $fillable = [
         'name',
         'address',
@@ -41,6 +50,11 @@ class AttendanceLocation extends Model
         ];
     }
 
+    /**
+     * Token QR dibuat satu kali saat lokasi pertama kali dibuat dan tidak pernah
+     * berubah akibat edit data lokasi. Token hanya berganti bila admin secara
+     * sadar memanggil rotateToken() dari halaman QR.
+     */
     protected static function booted(): void
     {
         static::creating(function (self $location): void {

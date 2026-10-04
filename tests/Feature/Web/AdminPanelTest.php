@@ -328,4 +328,78 @@ class AdminPanelTest extends TestCase
         $this->get('/admin/locations')->assertOk()->assertSee('Kantor Pusat', false);
         $this->assertNotNull($location);
     }
+
+    public function test_new_location_gets_one_qr_token_that_survives_admin_edits(): void
+    {
+        $this->admin();
+
+        $this->post('/admin/locations', [
+            'name' => 'Wilayah Operasional',
+            'address' => 'Jl. Merdeka No. 1',
+            'latitude' => -6.2,
+            'longitude' => 106.8,
+            'radius' => AttendanceLocation::DEFAULT_RADIUS_METERS,
+            'status' => 'active',
+        ])->assertRedirect(route('admin.locations.index'));
+
+        $location = AttendanceLocation::where('name', 'Wilayah Operasional')->firstOrFail();
+        $token = $location->public_token;
+
+        $this->assertNotEmpty($token);
+        $this->assertNull($location->qr_rotated_at);
+
+        $this->put('/admin/locations/'.$location->id, [
+            'name' => 'Wilayah Operasional',
+            'address' => 'Jl. Merdeka No. 99',
+            'latitude' => -6.3,
+            'longitude' => 106.9,
+            'radius' => AttendanceLocation::MAX_RADIUS_METERS,
+            'status' => 'active',
+        ])->assertRedirect(route('admin.locations.index'));
+
+        $location->refresh();
+
+        $this->assertSame($token, $location->public_token);
+        $this->assertSame('Jl. Merdeka No. 99', $location->address);
+        $this->assertSame(AttendanceLocation::MAX_RADIUS_METERS, $location->radius);
+        $this->assertNull($location->qr_rotated_at);
+    }
+
+    public function test_location_radius_is_capped_at_one_hundred_kilometers(): void
+    {
+        $this->admin();
+
+        $this->post('/admin/locations', [
+            'name' => 'Radius Kebesaran',
+            'latitude' => -6.2,
+            'longitude' => 106.8,
+            'radius' => AttendanceLocation::MAX_RADIUS_METERS + 1,
+            'status' => 'active',
+        ])->assertSessionHasErrors('radius');
+
+        $this->assertDatabaseMissing('attendance_locations', ['name' => 'Radius Kebesaran']);
+    }
+
+    public function test_create_location_form_defaults_to_the_maximum_radius(): void
+    {
+        $this->admin();
+
+        $this->get('/admin/locations/create')
+            ->assertOk()
+            ->assertSee('value="'.AttendanceLocation::DEFAULT_RADIUS_METERS.'"', false);
+    }
+
+    public function test_token_rotation_is_only_offered_from_the_qr_page(): void
+    {
+        $this->admin();
+        $location = AttendanceLocation::factory()->create();
+
+        $this->get('/admin/locations/'.$location->id.'/edit')
+            ->assertOk()
+            ->assertDontSee(route('admin.locations.rotate', $location), false);
+
+        $this->get('/admin/locations/'.$location->id.'/qr')
+            ->assertOk()
+            ->assertSee(route('admin.locations.rotate', $location), false);
+    }
 }

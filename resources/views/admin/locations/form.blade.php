@@ -44,8 +44,10 @@
                 </div>
                 <div class="field">
                     <label for="radius">Radius (meter)</label>
-                    <input id="radius" type="number" name="radius" min="20" max="5000"
-                           value="{{ old('radius', $location->radius ?? 200) }}" required>
+                    <input id="radius" type="number" name="radius"
+                           min="{{ \App\Models\AttendanceLocation::MIN_RADIUS_METERS }}"
+                           max="{{ \App\Models\AttendanceLocation::MAX_RADIUS_METERS }}"
+                           value="{{ old('radius', $location->radius ?? \App\Models\AttendanceLocation::DEFAULT_RADIUS_METERS) }}" required>
                 </div>
             </div>
 
@@ -70,13 +72,13 @@
                 QR hanya dapat dibaca melalui aplikasi mobile untuk menerbitkan ticket validasi sekali pakai.
                 Token QR tidak pernah dikirim ke API.
             </p>
+            <p class="hint">
+                QR dibuat sekali saat lokasi dibuat dan bersifat permanen untuk wilayah ini. Menyimpan perubahan
+                pada halaman ini tidak akan mengubah QR. Untuk mencabut QR yang sudah tidak aman, gunakan tombol
+                "Ganti QR Code" di halaman QR.
+            </p>
             <div class="toolbar" style="margin-bottom:0">
                 <a class="btn" href="{{ route('admin.locations.qr', $location) }}">Buka QR Code</a>
-                <form method="POST" action="{{ route('admin.locations.rotate', $location) }}"
-                      onsubmit="return confirm('Token QR lama tidak akan berlaku lagi. Lanjutkan?')">
-                    @csrf
-                    <button class="btn danger" type="submit">Rotasi Token QR</button>
-                </form>
             </div>
         </div>
     @endif

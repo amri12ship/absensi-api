@@ -39,7 +39,7 @@ class AttendanceSetting extends Model
             'work_start' => '08:00:00',
             'work_end' => '17:00:00',
             'tolerance_minutes' => 15,
-            'radius_meter' => 200,
+            'radius_meter' => AttendanceLocation::DEFAULT_RADIUS_METERS,
             'max_accuracy_meter' => 50,
             'ticket_ttl_seconds' => 120,
             'max_ticket_per_day' => 10,

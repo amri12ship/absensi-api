@@ -192,4 +192,33 @@ class QrValidationTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('code', 'EMPLOYEE_PROFILE_MISSING');
     }
+
+    public function test_location_qr_token_survives_location_edits(): void
+    {
+        $employee = $this->signIn();
+        $location = AttendanceLocation::factory()->create();
+        $employee->locations()->attach($location->id, ['is_primary' => true]);
+
+        $token = $location->public_token;
+
+        $location->forceFill([
+            'name' => 'Nama Baru',
+            'address' => 'Alamat Baru',
+            'latitude' => -1.234567,
+            'longitude' => 100.987654,
+            'radius' => AttendanceLocation::MAX_RADIUS_METERS,
+        ])->save();
+
+        $location->refresh();
+
+        $this->assertSame($token, $location->public_token);
+        $this->assertNull($location->qr_rotated_at);
+        $this->assertSame($token, AttendanceLocation::findOrFail($location->id)->public_token);
+
+        $this->postJson('/api/v1/qr/validate', [
+            'code' => $location->qrPayload(),
+            'latitude' => $location->latitude,
+            'longitude' => $location->longitude,
+        ])->assertCreated();
+    }
 }

@@ -33,8 +33,11 @@
             <div class="grid cols-3">
                 <div class="field">
                     <label for="radius_meter">Radius Default (meter)</label>
-                    <input id="radius_meter" type="number" name="radius_meter" min="20" max="5000"
+                    <input id="radius_meter" type="number" name="radius_meter"
+                           min="{{ \App\Models\AttendanceLocation::MIN_RADIUS_METERS }}"
+                           max="{{ \App\Models\AttendanceLocation::MAX_RADIUS_METERS }}"
                            value="{{ old('radius_meter', $setting->radius_meter) }}" required>
+                    <p class="hint">Nilai ini hanya acuan. Radius yang benar-benar dipakai saat cek GPS adalah radius pada masing-masing lokasi.</p>
                 </div>
                 <div class="field">
                     <label for="max_accuracy_meter">Maks Akurasi GPS (meter)</label>

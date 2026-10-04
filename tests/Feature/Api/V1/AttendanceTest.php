@@ -141,6 +141,44 @@ class AttendanceTest extends TestCase
         $this->assertDatabaseCount('attendance_records', 0);
     }
 
+    public function test_check_in_is_allowed_far_inside_the_maximum_radius(): void
+    {
+        $this->workingDay();
+        [, $location] = $this->scenario();
+        $location->update(['radius' => AttendanceLocation::MAX_RADIUS_METERS]);
+        $ticket = $this->issueTicket($location->refresh());
+
+        [$latitude, $longitude] = Geo::offset($location->latitude, $location->longitude, 50000, 0);
+
+        $this->postJson('/api/v1/attendance/check-in', [
+            'ticket' => $ticket,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'selfie' => $this->selfie,
+        ])->assertCreated();
+
+        $this->assertDatabaseCount('attendance_records', 1);
+    }
+
+    public function test_check_in_is_rejected_beyond_the_maximum_radius(): void
+    {
+        $this->workingDay();
+        [, $location] = $this->scenario();
+        $location->update(['radius' => AttendanceLocation::MAX_RADIUS_METERS]);
+        $ticket = $this->issueTicket($location->refresh());
+
+        [$latitude, $longitude] = Geo::offset($location->latitude, $location->longitude, AttendanceLocation::MAX_RADIUS_METERS + 5000, 0);
+
+        $this->postJson('/api/v1/attendance/check-in', [
+            'ticket' => $ticket,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'selfie' => $this->selfie,
+        ])->assertStatus(422)->assertJsonPath('code', 'OUT_OF_RANGE');
+
+        $this->assertDatabaseCount('attendance_records', 0);
+    }
+
     public function test_check_in_after_tolerance_is_marked_late(): void
     {
         $this->workingDay();

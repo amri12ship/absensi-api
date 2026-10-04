@@ -12,14 +12,18 @@
 
         <p style="margin-bottom:4px">Pindai QR ini dari aplikasi mobile saat check-in.</p>
         <p class="token">{{ $location->public_token }}</p>
+        <p class="hint" style="margin-top:0">
+            QR ini dibuat sekali dan permanen untuk {{ $location->name }}. Cetak sekali lalu pakai terus —
+            QR tidak berubah hanya karena admin memperbaiki data lokasi.
+        </p>
 
         <div class="no-print" style="margin-top:18px">
             <a class="btn" href="{{ route('admin.locations.index') }}">Kembali</a>
             <button class="btn secondary" type="button" onclick="window.print()">Cetak</button>
             <form method="POST" action="{{ route('admin.locations.rotate', $location) }}" style="display:inline"
-                  onsubmit="return confirm('Token QR lama tidak akan berlaku lagi. Lanjutkan?')">
+                  onsubmit="return confirm('Ganti QR Code?\n\nQR yang dicetak sebelumnya tidak akan berlaku lagi. Lanjutkan?')">
                 @csrf
-                <button class="btn danger" type="submit">Rotasi Token</button>
+                <button class="btn danger" type="submit">Ganti QR Code</button>
             </form>
         </div>
     </div>
